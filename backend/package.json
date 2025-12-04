@@ -1,0 +1,23 @@
+{
+  "name": "ai-ticket-manager-backend",
+  "version": "1.0.0",
+  "description": "Backend orchestrator for AI Ticket Manager",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

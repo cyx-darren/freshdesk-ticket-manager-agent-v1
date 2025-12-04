@@ -1,0 +1,20 @@
+{
+  "name": "ai-ticket-manager-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for AI Ticket Manager",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
