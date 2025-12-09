@@ -1,6 +1,7 @@
 import { getFullTicketData } from './freshdesk.js';
 import { classifyTicket } from './classifier.js';
 import { queryKnowledgeBase, buildKBQuery } from '../agents/kb-agent.js';
+import { queryPriceAgent, buildPriceQuery } from '../agents/price-agent.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 
@@ -80,12 +81,15 @@ async function callAgents(analysis, ticketData, options) {
     agentPromises.push(kbPromise);
   }
 
-  // Price Agent (Phase 2 - placeholder)
-  if (options.includePrice && intents.includes('PRICE')) {
-    responses.price = {
-      success: false,
-      message: 'Price Agent not yet implemented (Phase 2)',
-    };
+  // Price Agent
+  if (options.includePrice !== false && intents.includes('PRICE')) {
+    const pricePromise = callPriceAgent(analysis, ticketData)
+      .then(result => { responses.price = result; })
+      .catch(error => {
+        logger.error('Price Agent failed:', error);
+        responses.price = { success: false, error: error.message };
+      });
+    agentPromises.push(pricePromise);
   }
 
   // Artwork Agent (Phase 2 - placeholder)
@@ -109,6 +113,20 @@ async function callKBAgent(analysis, ticketData) {
   const query = buildKBQuery(analysis, ticketData.ticket.subject);
 
   const result = await queryKnowledgeBase(query, {
+    ticketId: ticketData.ticket.id,
+    customerEmail: ticketData.customer.email,
+  });
+
+  return result;
+}
+
+/**
+ * Call the Price Agent
+ */
+async function callPriceAgent(analysis, ticketData) {
+  const query = buildPriceQuery(analysis, ticketData.ticket.subject);
+
+  const result = await queryPriceAgent(query, {
     ticketId: ticketData.ticket.id,
     customerEmail: ticketData.customer.email,
   });

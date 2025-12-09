@@ -21,7 +21,7 @@ export async function analyzeTicket(ticketId, discordUserId, discordChannelId) {
       discordChannelId,
       options: {
         includeKB: true,
-        includePrice: false,
+        includePrice: true,
         includeArtwork: false,
       },
     });

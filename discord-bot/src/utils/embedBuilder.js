@@ -82,25 +82,129 @@ export function buildTicketEmbed(data) {
   // KB Agent response
   if (agentResponses?.knowledge?.success) {
     const kb = agentResponses.knowledge;
-    let kbValue = truncate(kb.answer, 900);
+    const answer = kb.answer || '';
 
-    // Add sources if available
+    // Split long answers into chunks of ~1000 chars (leaving room for formatting)
+    const chunks = splitIntoChunks(answer, 1000);
+
+    chunks.forEach((chunk, index) => {
+      embed.addFields({
+        name: index === 0 ? 'Knowledge Base Answer' : '​', // Zero-width space for continuation
+        value: chunk,
+        inline: false,
+      });
+    });
+
+    // Add sources as separate field
     if (kb.sources?.length > 0) {
       const sources = kb.sources
         .slice(0, 3)
         .map(s => `[${s.title || `Article #${s.id}`}](${s.url})`)
         .join('\n');
-      kbValue += `\n\n**Sources:**\n${sources}`;
+      embed.addFields({
+        name: 'Sources',
+        value: sources,
+        inline: false,
+      });
     }
+  }
 
+  // Price Agent response
+  if (agentResponses?.price?.success && agentResponses.price.results?.length > 0) {
+    const priceData = agentResponses.price;
+    const formattedPricing = formatPriceResults(priceData.results);
+
+    // Split pricing into chunks if needed
+    const priceChunks = splitIntoChunks(formattedPricing, 1000);
+
+    priceChunks.forEach((chunk, index) => {
+      embed.addFields({
+        name: index === 0 ? `Pricing (${priceData.productsFound} products found)` : '​',
+        value: chunk,
+        inline: false,
+      });
+    });
+
+    // Show alternatives if main results are limited
+    if (priceData.alternatives?.length > 0 && priceData.results.length < 3) {
+      const altNames = priceData.alternatives
+        .slice(0, 3)
+        .map(a => a.product_name)
+        .join(', ');
+      embed.addFields({
+        name: 'Similar Products',
+        value: truncate(altNames, 1024),
+        inline: false,
+      });
+    }
+  } else if (agentResponses?.price?.success && agentResponses.price.productsFound === 0) {
+    // Price agent was called but found no matching products
     embed.addFields({
-      name: 'Knowledge Base Answer',
-      value: kbValue,
+      name: 'Pricing',
+      value: 'No pricing found in pricelist for this product. Contact sales for a custom quote.',
+      inline: false,
+    });
+  } else if (agentResponses?.price && !agentResponses.price.success) {
+    // Price agent was called but failed
+    embed.addFields({
+      name: 'Pricing',
+      value: agentResponses.price.error || 'Price lookup failed. Contact sales for a quote.',
       inline: false,
     });
   }
 
   return embed;
+}
+
+/**
+ * Format price results for Discord display
+ */
+function formatPriceResults(results) {
+  if (!results || results.length === 0) {
+    return 'No products found matching your query.';
+  }
+
+  return results
+    .slice(0, 5) // Limit to 5 products
+    .map(result => {
+      const lines = [];
+
+      lines.push(`**${result.product_name}**`);
+
+      if (result.dimensions) {
+        lines.push(`📐 ${result.dimensions}`);
+      }
+
+      if (result.print_option) {
+        lines.push(`🖨️ ${result.print_option}`);
+      }
+
+      if (result.pricing) {
+        const { requested_quantity, unit_price, total_price, currency } = result.pricing;
+        lines.push(`💰 **${requested_quantity} pcs @ ${currency} ${unit_price.toFixed(2)}/pc = ${currency} ${total_price.toFixed(2)}**`);
+      }
+
+      if (result.moq) {
+        lines.push(`📦 MOQ: ${result.moq.quantity} pcs @ $${result.moq.unit_price.toFixed(2)}/pc`);
+      }
+
+      if (result.lead_time) {
+        const lt = result.lead_time;
+        lines.push(`⏱️ ${lt.days_min}-${lt.days_max} working days (${lt.type})`);
+      }
+
+      // Show tier pricing
+      if (result.all_tiers?.length > 1) {
+        const tiers = result.all_tiers
+          .slice(0, 4)
+          .map(t => `${t.quantity}+ @ $${t.unit_price.toFixed(2)}`)
+          .join(' | ');
+        lines.push(`📊 ${tiers}`);
+      }
+
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }
 
 export function buildErrorEmbed(message, ticketId = null) {
@@ -129,4 +233,33 @@ function truncate(str, maxLength) {
   if (!str) return 'N/A';
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 3) + '...';
+}
+
+function splitIntoChunks(str, maxLength) {
+  if (!str) return ['N/A'];
+  if (str.length <= maxLength) return [str];
+
+  const chunks = [];
+  let remaining = str;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try to split at a newline or space to avoid breaking words
+    let splitIndex = remaining.lastIndexOf('\n', maxLength);
+    if (splitIndex === -1 || splitIndex < maxLength * 0.5) {
+      splitIndex = remaining.lastIndexOf(' ', maxLength);
+    }
+    if (splitIndex === -1 || splitIndex < maxLength * 0.5) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex));
+    remaining = remaining.slice(splitIndex).trim();
+  }
+
+  return chunks;
 }
