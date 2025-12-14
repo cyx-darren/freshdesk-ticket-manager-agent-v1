@@ -1,10 +1,10 @@
-# AI Ticket Manager - Product Requirements Document v2.0
+# AI Ticket Manager - Product Requirements Document v3.0
 
 ## Document Info
 | Field | Value |
 |-------|-------|
-| Version | 2.0 |
-| Last Updated | December 11, 2025 |
+| Version | 3.0 |
+| Last Updated | December 14, 2025 |
 | Status | In Progress |
 | Author | Darren / Claude |
 
@@ -37,6 +37,14 @@ A Discord-based multi-agent system that:
 3. Routes to specialist AI agents for domain-specific answers
 4. Combines responses into unified, actionable output
 5. Recommends sourcing options (Local vs China) based on quantity and urgency
+6. **Generates draft responses as a sales team member** (not referring customers elsewhere)
+
+### 1.5 Response Philosophy
+The AI Ticket Manager acts as a **virtual sales team member**, not a support assistant that redirects customers. Responses should:
+- **Be direct and authoritative** - "Yes, we have this product" not "You should contact sales"
+- **Provide complete information** - Include pricing, availability, and lead times in one response
+- **Sound human and professional** - Use natural sales language, not robotic AI responses
+- **Handle artwork requests gracefully** - Include "Will send the artwork to you shortly once ready." when artwork is being prepared
 
 ---
 
@@ -154,9 +162,14 @@ Response:
 
 ---
 
-### 3.3 Product Agent (NEW)
+### 3.3 Product Agent ✅ DEPLOYED
 
-**Status:** 🔄 To be built
+**Status:** ✅ Deployed and operational
+
+**Infrastructure:**
+| Component | URL |
+|-----------|-----|
+| Backend API | `easyprint-product-agent-production.up.railway.app` |
 
 **Purpose:** Answer product availability questions, handle synonyms, provide sourcing recommendations.
 
@@ -351,9 +364,14 @@ Response:
 
 ---
 
-### 3.4 Price Agent (NEW)
+### 3.4 Price Agent ✅ DEPLOYED
 
-**Status:** 🔄 To be built (PRD exists: PRICE_AGENT_PRD.md)
+**Status:** ✅ Deployed and operational (PRD: PRICE_AGENT_PRD.md)
+
+**Infrastructure:**
+| Component | URL |
+|-----------|-----|
+| Backend API | `backend-production-b948.up.railway.app` |
 
 **Purpose:** Query pricing database for MOQs and pricing information.
 
@@ -361,7 +379,7 @@ Response:
 1. Via `!ticket` command → Orchestrator auto-detects pricing questions
 2. Via `!price` command → Staff manually queries pricing directly
 
-**Data Source:** Google Sheets pricelist (existing) or Supabase (migrated)
+**Data Source:** Supabase (migrated from Google Sheets)
 
 **Key Features:**
 - Natural language query parsing with Claude
@@ -401,31 +419,45 @@ Response:
 
 **Status:** 🔄 To be built
 
-**Purpose:** Handle design/artwork requests by notifying the design team.
+**Purpose:** Handle design/artwork requests - detect when artwork/mockup is needed and include appropriate messaging.
+
+**Response Behavior:**
+When ARTWORK intent is detected, the generated response should include:
+> "Will send the artwork to you shortly once ready."
+
+This line should be naturally integrated into the response, not as a separate disclaimer.
 
 **Workflow:**
 1. Detect artwork-related intent in ticket
 2. Extract artwork requirements
-3. Post to #artwork-requests Discord channel
-4. Tag design team
-5. Track request status
+3. Include artwork message in generated response
+4. (Future) Post to #artwork-requests Discord channel
+5. (Future) Tag design team
 
-**Example:**
+**Example Response (Sales Team Member Style):**
 ```
-Ticket: "Can you create a mockup with our logo? Attached is our vector file."
+Customer: "Can you create a mockup with our logo for the canvas tote bag?
+          Here's our vector file."
 
-AI Action:
-├── Detect: ARTWORK intent
-├── Extract: Mockup request, logo attachment
-├── Post to #artwork-requests:
-│   "🎨 Artwork Request from Ticket #81309
-│    Customer: company@email.com
-│    Request: Create mockup with customer logo
-│    Attachment: vector file
-│    @design-team"
-└── Response: "I've forwarded your artwork request to our design team. 
-              They'll prepare a mockup and get back to you shortly."
+Generated Response:
+"Thanks for sending your logo! The canvas tote bag is a great choice.
+
+For 500 pieces with your 1-color logo print:
+• Price: $2.01 each ($1,005 total)
+• Lead time: 5-10 working days
+
+Will send the artwork to you shortly once ready.
+
+Let me know if you'd like to proceed with this order!"
 ```
+
+**Intent Detection Triggers:**
+- "mockup", "mock-up", "mock up"
+- "artwork", "art work"
+- "design"
+- "logo placement"
+- "visual", "preview"
+- "how will it look"
 
 ---
 
@@ -510,15 +542,18 @@ FALLBACK: If Price Agent has no data
 
 ### 4.3 Example Synthesized Response
 
+**Key Principle:** The response is written as if from a sales team member, NOT as an AI assistant redirecting to sales.
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ 📋 Ticket #81309                                               │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
 │ 📨 Latest Customer Message                                     │
-│ "Do you also have a white badge case also?"                    │
+│ "Do you also have a white badge case? Can you show me          │
+│  a mockup with our logo?"                                      │
 │                                                                │
-│ 🎯 Detected Intent: AVAILABILITY + PRICE                       │
+│ 🎯 Detected Intent: AVAILABILITY + PRICE + ARTWORK             │
 │                                                                │
 ├────────────────────────────────────────────────────────────────┤
 │ 📦 Product Agent                                               │
@@ -534,13 +569,15 @@ FALLBACK: If Price Agent has no data
 │ • 200 pcs @ $0.45/pc = $90.00 total                            │
 │                                                                │
 ├────────────────────────────────────────────────────────────────┤
-│ 💬 Suggested Response:                                         │
+│ 💬 Suggested Response (Sales Team Member Style):               │
 │                                                                │
-│ "Yes! We have white card holders (badge cases).                │
+│ "Yes! We have white card holders (badge cases) in stock.       │
 │                                                                │
-│  For 200 pieces:                                               │
+│  For 200 pieces with your logo:                                │
 │  • Price: $0.45 each ($90.00 total)                            │
 │  • Lead time: 5-10 working days                                │
+│                                                                │
+│  Will send the artwork to you shortly once ready.              │
 │                                                                │
 │  Since you're already ordering lanyards, I can combine         │
 │  these into one shipment. Would you like me to add             │
@@ -551,6 +588,16 @@ FALLBACK: If Price Agent has no data
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+### 4.4 Response Do's and Don'ts
+
+| ✅ DO | ❌ DON'T |
+|-------|----------|
+| "Yes, we have this in stock" | "I'll check with the team and get back to you" |
+| "The price is $2.50 each" | "Please contact our sales team for pricing" |
+| "Will send the artwork shortly" | "I've forwarded this to our design team" |
+| "Lead time is 5-10 days" | "Our team will advise on lead time" |
+| "Let me know if you'd like to proceed" | "A sales representative will follow up" |
 
 ---
 
@@ -675,18 +722,19 @@ SUPABASE_SERVICE_KEY=xxx
 - [x] Integrate with existing KB Agent via HTTP
 - [x] Deploy to Railway
 
-### Phase 2: Specialist Agents 🔄 IN PROGRESS
+### Phase 2: Specialist Agents ✅ MOSTLY COMPLETE
 - [x] Design Product Intelligence Sheet structure
 - [x] Create Google Sheet template
+- [x] Build Product Agent (Website + Sheet integration) ✅
+- [x] Build Price Agent (Pricelist/Supabase integration) ✅
+- [x] Update orchestrator to call all agents ✅
 - [ ] Scrape Magento 2 → Populate sheet with 300-400 products
-- [ ] Build Product Agent (Website + Sheet integration)
-- [ ] Build Price Agent (Pricelist integration)
-- [ ] Build Artwork Agent (Discord notifications)
-- [ ] Update orchestrator to call all agents
-- [ ] Implement response synthesizer with priority logic
+- [ ] Build Artwork Agent (artwork message integration)
+- [ ] Implement response synthesizer with suggested reply generation
 
-### Phase 3: Auto-Reply (Future)
-- [ ] Generate draft replies from synthesized responses
+### Phase 3: Sales Response Generation 🔄 IN PROGRESS
+- [ ] Generate draft replies in sales team member style
+- [ ] Include "Will send the artwork shortly" for ARTWORK intents
 - [ ] Add Discord approval buttons (✅ Approve / ✏️ Edit / ❌ Cancel)
 - [ ] Integrate Freshdesk reply API
 - [ ] Human-in-the-loop workflow
@@ -762,3 +810,4 @@ SUPABASE_SERVICE_KEY=xxx
 |---------|------|---------|
 | 1.0 | 2025-12-10 | Initial PRD with KB Agent integration |
 | 2.0 | 2025-12-11 | Added Product Agent, sourcing logic, Google Sheet structure |
+| 3.0 | 2025-12-14 | Updated status: Product Agent & Price Agent deployed. Added Response Philosophy (sales team member style). Updated Artwork Agent to include "Will send artwork shortly" message. Reorganized phases to reflect actual progress. |

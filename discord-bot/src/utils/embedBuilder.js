@@ -15,7 +15,7 @@ const PRIORITY_MAP = {
 };
 
 export function buildTicketEmbed(data) {
-  const { ticket, analysis, agentResponses, freshdeskUrl } = data;
+  const { ticket, analysis, agentResponses, synthesizedResponse, freshdeskUrl } = data;
 
   const embed = new EmbedBuilder()
     .setColor(0x0099ff)
@@ -171,6 +171,42 @@ export function buildTicketEmbed(data) {
     embed.addFields({
       name: 'Pricing',
       value: agentResponses.price.error || 'Price lookup failed. Contact sales for a quote.',
+      inline: false,
+    });
+  }
+
+  // Suggested Response (synthesized by AI)
+  if (synthesizedResponse?.success && synthesizedResponse.suggestedResponse) {
+    // Add a separator
+    embed.addFields({
+      name: '\u200B', // Zero-width space as separator
+      value: '───────────────────────',
+      inline: false,
+    });
+
+    // Add the suggested response with copy-friendly formatting
+    const responseChunks = splitIntoChunks(synthesizedResponse.suggestedResponse, 1000);
+
+    responseChunks.forEach((chunk, index) => {
+      embed.addFields({
+        name: index === 0 ? '💬 Suggested Response' : '​',
+        value: chunk,
+        inline: false,
+      });
+    });
+
+    // Add artwork indicator if applicable
+    if (synthesizedResponse.hasArtworkIntent) {
+      embed.addFields({
+        name: '🎨 Artwork',
+        value: 'Response includes artwork promise - ensure mockup is prepared',
+        inline: false,
+      });
+    }
+  } else if (synthesizedResponse && !synthesizedResponse.success) {
+    embed.addFields({
+      name: '💬 Suggested Response',
+      value: '⚠️ Could not generate suggested response. Please compose manually.',
       inline: false,
     });
   }

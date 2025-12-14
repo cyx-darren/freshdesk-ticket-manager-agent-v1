@@ -1,5 +1,6 @@
 import { getFullTicketData } from './freshdesk.js';
 import { classifyTicket } from './classifier.js';
+import { synthesizeResponse } from './synthesizer.js';
 import { queryKnowledgeBase, buildKBQuery } from '../agents/kb-agent.js';
 import { queryPriceAgent, buildPriceQuery } from '../agents/price-agent.js';
 import { queryProductAgent, buildProductQuery, extractProductContext } from '../agents/product-agent.js';
@@ -25,7 +26,13 @@ export async function analyzeTicket(ticketId, options = {}) {
   // Step 3: Call relevant agents based on intent
   const agentResponses = await callAgents(analysis, ticketData, options);
 
-  // Step 4: Build response
+  // Step 4: Synthesize a suggested response (sales team member style)
+  let synthesizedResponse = null;
+  if (options.includeSynthesis !== false) {
+    synthesizedResponse = await synthesizeResponse(ticketData, analysis, agentResponses);
+  }
+
+  // Step 5: Build response
   const processingTime = Date.now() - startTime;
 
   const result = {
@@ -48,6 +55,7 @@ export async function analyzeTicket(ticketId, options = {}) {
       confidence: analysis.confidence,
     },
     agentResponses,
+    synthesizedResponse,
     freshdeskUrl: `https://${config.freshdesk.domain}/a/tickets/${ticketId}`,
     processingTime,
     timestamp: new Date().toISOString(),
