@@ -219,27 +219,53 @@ function formatProductResults(product) {
         lines.push(`   🔗 easyprint.sg${url}`);
       }
 
-      // Sourcing recommendation
-      if (recommendation.source) {
-        const sourceLine = [`   🏭 Source: ${recommendation.source.toUpperCase()}`];
-        if (recommendation.supplier) {
-          sourceLine.push(`(${recommendation.supplier})`);
+      // Sourcing recommendation - display based on source type
+      if (recommendation.source === 'china') {
+        // China sourcing
+        lines.push(`   🏭 **Source: CHINA** 🇨🇳`);
+
+        // China MOQ
+        const chinaMoq = recommendation.moq || sourcing.china?.moq;
+        if (chinaMoq) {
+          lines.push(`   📦 MOQ: ${chinaMoq} pcs`);
         }
-        lines.push(sourceLine.join(' '));
-      }
 
-      // Lead time from recommendation or sourcing
-      if (recommendation.leadTime) {
-        lines.push(`   ⏱️ Lead time: ${recommendation.leadTime}`);
-      } else if (sourcing.local?.leadTime) {
-        lines.push(`   ⏱️ Lead time: ${sourcing.local.leadTime}`);
-      }
+        // Shipping options
+        if (sourcing.china) {
+          const shipping = [];
+          if (sourcing.china.air) shipping.push('Air');
+          if (sourcing.china.sea) shipping.push('Sea');
+          if (shipping.length > 0) {
+            lines.push(`   ✈️ Shipping: ${shipping.join(' / ')}`);
+          }
+        }
 
-      // MOQ
-      if (recommendation.moq) {
-        lines.push(`   📦 MOQ: ${recommendation.moq} pcs`);
-      } else if (sourcing.local?.moq) {
-        lines.push(`   📦 MOQ: ${sourcing.local.moq} pcs`);
+        // Reason for China recommendation
+        if (recommendation.reason) {
+          lines.push(`   💡 ${recommendation.reason}`);
+        }
+      } else if (recommendation.source === 'local' || sourcing.local) {
+        // Local sourcing
+        const supplier = recommendation.supplier || sourcing.local?.supplier;
+        lines.push(`   🏭 **Source: LOCAL** ${supplier ? `(${supplier})` : ''}`);
+
+        // Local MOQ
+        const localMoq = recommendation.moq || sourcing.local?.moq;
+        if (localMoq) {
+          lines.push(`   📦 MOQ: ${localMoq} pcs`);
+        }
+
+        // Lead time
+        const leadTime = recommendation.leadTime || sourcing.local?.leadTime;
+        if (leadTime) {
+          lines.push(`   ⏱️ Lead time: ${leadTime}`);
+        }
+      } else if (recommendation.source) {
+        // Fallback for other source types
+        lines.push(`   🏭 Source: ${recommendation.source.toUpperCase()}`);
+        if (recommendation.moq) {
+          lines.push(`   📦 MOQ: ${recommendation.moq} pcs`);
+        }
       }
     });
   }

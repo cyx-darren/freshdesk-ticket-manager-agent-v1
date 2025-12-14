@@ -67,14 +67,15 @@ export async function queryProductAgent(query, context = {}) {
 
 /**
  * Build a product query from ticket analysis
+ * Includes quantity in query text so Product Agent can parse it
  */
 export function buildProductQuery(analysis, ticketSubject) {
   const { latestCustomerMessage, extractedEntities } = analysis;
 
-  // Start with the customer message
+  // Start with the customer message (contains quantity info)
   let query = latestCustomerMessage || ticketSubject;
 
-  // If we have extracted entities, we can enhance the query
+  // If we have extracted entities, enhance but keep quantity context
   if (extractedEntities) {
     const parts = [];
 
@@ -88,12 +89,24 @@ export function buildProductQuery(analysis, ticketSubject) {
       parts.push(extractedEntities.customization.join(' '));
     }
 
+    // Add quantity from extracted entities or original message
+    if (extractedEntities.quantity) {
+      // Include quantity string (e.g., "5000pcs" or "5000 pieces")
+      const qtyStr = String(extractedEntities.quantity);
+      if (!qtyStr.toLowerCase().includes('pcs') && !qtyStr.toLowerCase().includes('piece')) {
+        parts.push(`${qtyStr} pcs`);
+      } else {
+        parts.push(qtyStr);
+      }
+    }
+
     // If we have meaningful extracted parts, use them
     if (parts.length > 0) {
       query = parts.join(' ');
     }
   }
 
+  logger.info(`Built Product Agent query: "${query}"`);
   return query;
 }
 
