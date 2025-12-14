@@ -6,64 +6,79 @@ const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
 });
 
-const SYNTHESIZER_PROMPT = `You are a sales team member at EasyPrint, a corporate gift printing company in Singapore.
-Your task is to write a professional email response to a customer inquiry.
+const SYNTHESIZER_PROMPT = `You are writing an email response for EasyPrint, a corporate gift printing company in Singapore.
 
-IMPORTANT GUIDELINES:
-1. Write as a SALES TEAM MEMBER, not as an AI or support assistant
-2. Be direct and authoritative - "Yes, we have this" not "I'll check with the team"
-3. Include specific pricing, quantities, and lead times when available
-4. Sound natural and professional - avoid robotic language
-5. Keep responses concise but complete (aim for 3-6 sentences)
-6. End with a clear call-to-action (e.g., "Let me know if you'd like to proceed!")
-7. Do NOT use phrases like:
-   - "I'll forward this to our team"
-   - "Please contact our sales department"
-   - "A representative will get back to you"
-   - "I've passed this to our design team"
+STRICT RULES:
+1. NEVER invent or estimate prices - ONLY use exact prices from PRICING INFORMATION section below
+2. If no pricing data is provided, say "I will get back to you with a quotation shortly."
+3. Follow the EXACT template structure below
+4. Do NOT add extra commentary or explanations beyond the template
+
+CONTEXT:
+- Email Count: {email_count} (if > 1 = reply, if = 1 = new enquiry)
+- Customer: {customer_email}
+- Subject: {subject}
+- Latest Message: {latest_message}
+- Detected Intents: {intents}
+- Customer Requested Quantity: {requested_quantity}
+
+AVAILABLE DATA:
+{agent_data}
+
+RESPONSE TEMPLATE (follow this structure exactly):
+
+1. OPENING (required - choose based on email count):
+   - If email_count > 1: "Thank you for your reply!"
+   - If email_count = 1: "Thank you for your enquiry!"
+
+2. PRODUCT & PRICING (required):
+   - If PRICING INFORMATION section has prices:
+     "For [product name], here are the pricing for your kind consideration. The pricing provided are inclusive of free delivery and 9% GST."
+     Then list the prices EXACTLY as shown in the data.
+   - If NO pricing in the data:
+     "For [product name], I will get back to you with a quotation shortly."
+
+3. LEAD TIME (include if available in data):
+   - Format: "Lead time is X-Y working days via [air/sea] freight."
+
+4. MOQ NOTE (only include if MOQ_SHOULD_SHOW is true):
+   - "Do kindly note that the minimum order quantity for [product] is [X] pcs."
 
 {artwork_instruction}
 
-TICKET CONTEXT:
-Customer: {customer_email}
-Subject: {subject}
-Latest Customer Message: {latest_message}
-Detected Intents: {intents}
+5. CLOSING (required):
+   - "Thank you, and looking forward to your reply!"
 
-AVAILABLE INFORMATION FROM OUR SYSTEMS:
+Write ONLY the email body text now (no greeting, no signature):`;
 
-{agent_data}
-
-TASK:
-Write a complete email response that:
-1. Directly addresses the customer's question(s)
-2. Includes all relevant pricing, availability, and lead time information
-3. Sounds like it's from an actual sales person
-4. Ends with a call-to-action
-
-Respond with ONLY the email body text (no subject line, no greeting like "Dear Customer", no signature block - just the response content that would go after "Hi [Name]," and before the signature).`;
-
-const ARTWORK_INSTRUCTION = `8. ARTWORK: The customer has requested artwork/mockup. Include this line naturally in your response: "Will send the artwork to you shortly once ready."`;
+const ARTWORK_INSTRUCTION = `
+ARTWORK (include this exact line if artwork/mockup was requested):
+   - "Will send the artwork to you shortly once ready."`;
 
 /**
  * Synthesize a sales-style response from agent data
  */
 export async function synthesizeResponse(ticketData, analysis, agentResponses) {
-  const { ticket, customer } = ticketData;
-  const { intents, latestCustomerMessage } = analysis;
+  const { ticket, customer, emailCount } = ticketData;
+  const { intents, latestCustomerMessage, extractedEntities } = analysis;
 
-  // Build agent data summary
-  const agentDataSummary = buildAgentDataSummary(agentResponses, analysis);
+  // Get customer's requested quantity
+  const requestedQuantity = extractedEntities?.quantity || null;
+
+  // Build agent data summary with MOQ logic
+  const agentDataSummary = buildAgentDataSummary(agentResponses, analysis, requestedQuantity);
 
   // Check if artwork intent is detected
   const hasArtworkIntent = intents.includes('ARTWORK');
   const artworkInstruction = hasArtworkIntent ? ARTWORK_INSTRUCTION : '';
 
   const prompt = SYNTHESIZER_PROMPT
+    .replace('{email_count}', String(emailCount || 1))
     .replace('{customer_email}', customer.email)
     .replace('{subject}', ticket.subject)
     .replace('{latest_message}', latestCustomerMessage || 'N/A')
     .replace('{intents}', intents.join(', '))
+    .replace('{requested_quantity}', requestedQuantity ? `${requestedQuantity} pcs` : 'Not specified')
     .replace('{agent_data}', agentDataSummary)
     .replace('{artwork_instruction}', artworkInstruction);
 
@@ -104,8 +119,9 @@ export async function synthesizeResponse(ticketData, analysis, agentResponses) {
 /**
  * Build a summary of agent data for the synthesizer prompt
  */
-function buildAgentDataSummary(agentResponses, analysis) {
+function buildAgentDataSummary(agentResponses, analysis, requestedQuantity) {
   const sections = [];
+  let moqValue = null; // Track MOQ for conditional display
 
   // Product availability data
   if (agentResponses.product?.success) {
@@ -132,7 +148,10 @@ function buildAgentDataSummary(agentResponses, analysis) {
           if (recommendation.source === 'china') {
             productLines.push(`   - Source: China`);
             const moq = recommendation.moq || sourcing.china?.moq;
-            if (moq) productLines.push(`   - MOQ: ${moq} pcs`);
+            if (moq) {
+              productLines.push(`   - MOQ: ${moq} pcs`);
+              if (!moqValue) moqValue = parseInt(moq, 10); // Track first MOQ found
+            }
             if (sourcing.china?.air) productLines.push(`   - Shipping: Air available (10-15 days)`);
             if (sourcing.china?.sea) productLines.push(`   - Shipping: Sea available (20-35 days)`);
             if (recommendation.reason) productLines.push(`   - Note: ${recommendation.reason}`);
@@ -140,7 +159,10 @@ function buildAgentDataSummary(agentResponses, analysis) {
             const supplier = recommendation.supplier || sourcing.local?.supplier;
             productLines.push(`   - Source: Local${supplier ? ` (${supplier})` : ''}`);
             const moq = recommendation.moq || sourcing.local?.moq;
-            if (moq) productLines.push(`   - MOQ: ${moq} pcs`);
+            if (moq) {
+              productLines.push(`   - MOQ: ${moq} pcs`);
+              if (!moqValue) moqValue = parseInt(moq, 10); // Track first MOQ found
+            }
             const leadTime = recommendation.leadTime || sourcing.local?.leadTime;
             if (leadTime) productLines.push(`   - Lead time: ${leadTime}`);
           }
@@ -170,6 +192,7 @@ function buildAgentDataSummary(agentResponses, analysis) {
 
       if (result.moq) {
         priceLines.push(`   MOQ: ${result.moq.quantity} pcs @ $${result.moq.unit_price.toFixed(2)}/pc`);
+        if (!moqValue) moqValue = result.moq.quantity; // Track MOQ from pricing
       }
 
       if (result.lead_time) {
@@ -220,8 +243,23 @@ function buildAgentDataSummary(agentResponses, analysis) {
     }
   }
 
-  if (sections.length === 0) {
-    return 'No specific product, pricing, or knowledge base information available.\nProvide a helpful response and offer to get more details.';
+  // Determine if MOQ should be shown based on conditions:
+  // 1. Customer asked about MOQ, or
+  // 2. Customer's requested quantity is less than MOQ
+  const customerMessage = (analysis.latestCustomerMessage || '').toLowerCase();
+  const askedAboutMoq = customerMessage.includes('moq') ||
+    customerMessage.includes('minimum order') ||
+    customerMessage.includes('minimum qty') ||
+    customerMessage.includes('minimum quantity');
+
+  const quantityBelowMoq = moqValue && requestedQuantity && requestedQuantity < moqValue;
+  const moqShouldShow = askedAboutMoq || quantityBelowMoq;
+
+  // Add MOQ instruction section
+  sections.push(`MOQ_SHOULD_SHOW: ${moqShouldShow ? 'true' : 'false'}${moqValue ? ` (MOQ is ${moqValue} pcs)` : ''}`);
+
+  if (sections.length === 1) { // Only the MOQ flag
+    return 'No specific product, pricing, or knowledge base information available.\nProvide a helpful response and offer to get more details.\n\n' + sections[0];
   }
 
   return sections.join('\n\n---\n\n');
