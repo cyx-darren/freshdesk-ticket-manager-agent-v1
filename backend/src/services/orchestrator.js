@@ -2,6 +2,7 @@ import { getFullTicketData } from './freshdesk.js';
 import { classifyTicket } from './classifier.js';
 import { queryKnowledgeBase, buildKBQuery } from '../agents/kb-agent.js';
 import { queryPriceAgent, buildPriceQuery } from '../agents/price-agent.js';
+import { queryProductAgent, buildProductQuery, extractProductContext } from '../agents/product-agent.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 
@@ -64,6 +65,7 @@ async function callAgents(analysis, ticketData, options) {
   const { intents } = analysis;
   const responses = {
     knowledge: null,
+    product: null,
     price: null,
     artwork: null,
   };
@@ -79,6 +81,17 @@ async function callAgents(analysis, ticketData, options) {
         responses.knowledge = { success: false, error: error.message };
       });
     agentPromises.push(kbPromise);
+  }
+
+  // Product Agent
+  if (options.includeProduct !== false && intents.includes('AVAILABILITY')) {
+    const productPromise = callProductAgent(analysis, ticketData)
+      .then(result => { responses.product = result; })
+      .catch(error => {
+        logger.error('Product Agent failed:', error);
+        responses.product = { success: false, error: error.message };
+      });
+    agentPromises.push(productPromise);
   }
 
   // Price Agent
@@ -129,6 +142,23 @@ async function callPriceAgent(analysis, ticketData) {
   const result = await queryPriceAgent(query, {
     ticketId: ticketData.ticket.id,
     customerEmail: ticketData.customer.email,
+  });
+
+  return result;
+}
+
+/**
+ * Call the Product Agent
+ */
+async function callProductAgent(analysis, ticketData) {
+  const query = buildProductQuery(analysis, ticketData.ticket.subject);
+  const { quantity, urgent } = extractProductContext(analysis);
+
+  const result = await queryProductAgent(query, {
+    ticketId: ticketData.ticket.id,
+    customerEmail: ticketData.customer.email,
+    quantity,
+    urgent: urgent || analysis.urgent || false,
   });
 
   return result;

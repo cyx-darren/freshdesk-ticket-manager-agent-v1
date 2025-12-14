@@ -109,6 +109,28 @@ export function buildTicketEmbed(data) {
     }
   }
 
+  // Product Agent response
+  if (agentResponses?.product?.success) {
+    const product = agentResponses.product;
+    const formattedProduct = formatProductResults(product);
+
+    const productChunks = splitIntoChunks(formattedProduct, 1000);
+
+    productChunks.forEach((chunk, index) => {
+      embed.addFields({
+        name: index === 0 ? 'Product Availability' : '​',
+        value: chunk,
+        inline: false,
+      });
+    });
+  } else if (agentResponses?.product && !agentResponses.product.success) {
+    embed.addFields({
+      name: 'Product Availability',
+      value: agentResponses.product.error || 'Product lookup failed.',
+      inline: false,
+    });
+  }
+
   // Price Agent response
   if (agentResponses?.price?.success && agentResponses.price.results?.length > 0) {
     const priceData = agentResponses.price;
@@ -154,6 +176,81 @@ export function buildTicketEmbed(data) {
   }
 
   return embed;
+}
+
+/**
+ * Format product availability results for Discord display
+ */
+function formatProductResults(product) {
+  const lines = [];
+
+  // Synonym resolution
+  if (product.synonymResolved) {
+    lines.push(`🔍 **Matched:** "${product.synonymResolved}"`);
+  }
+
+  // Availability status
+  if (product.found) {
+    lines.push(`✅ **Available:** Yes`);
+    if (product.colorAvailable) {
+      lines.push(`🎨 Requested color: Available`);
+    } else {
+      lines.push(`⚠️ Requested color: Not available (check alternatives)`);
+    }
+  } else {
+    lines.push(`❌ **Available:** No matching products found`);
+  }
+
+  // Product list - handle nested structure from Product Agent
+  if (product.products?.length > 0) {
+    lines.push('');
+    lines.push(`📦 **Products found (${product.products.length}):**`);
+    product.products.slice(0, 3).forEach((item, index) => {
+      // Handle nested product structure: item.product.name or item.name
+      const productData = item.product || item;
+      const name = productData.name || productData.product_name || 'Unknown';
+      const url = productData.url || item.url;
+      const recommendation = item.recommendation || {};
+      const sourcing = productData.sourcing || {};
+
+      lines.push(`${index + 1}. **${name}**`);
+
+      if (url) {
+        lines.push(`   🔗 easyprint.sg${url}`);
+      }
+
+      // Sourcing recommendation
+      if (recommendation.source) {
+        const sourceLine = [`   🏭 Source: ${recommendation.source.toUpperCase()}`];
+        if (recommendation.supplier) {
+          sourceLine.push(`(${recommendation.supplier})`);
+        }
+        lines.push(sourceLine.join(' '));
+      }
+
+      // Lead time from recommendation or sourcing
+      if (recommendation.leadTime) {
+        lines.push(`   ⏱️ Lead time: ${recommendation.leadTime}`);
+      } else if (sourcing.local?.leadTime) {
+        lines.push(`   ⏱️ Lead time: ${sourcing.local.leadTime}`);
+      }
+
+      // MOQ
+      if (recommendation.moq) {
+        lines.push(`   📦 MOQ: ${recommendation.moq} pcs`);
+      } else if (sourcing.local?.moq) {
+        lines.push(`   📦 MOQ: ${sourcing.local.moq} pcs`);
+      }
+    });
+  }
+
+  // Summary from Product Agent
+  if (product.summary) {
+    lines.push('');
+    lines.push(`💬 ${product.summary}`);
+  }
+
+  return lines.join('\n') || 'No availability information found.';
 }
 
 /**

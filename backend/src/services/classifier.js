@@ -25,11 +25,13 @@ TASK:
 2. Identify the customer's latest request/question
 3. Classify the intent(s) from these categories:
    - KNOWLEDGE: Customer asking about product information, specifications, processes, policies
-   - PRICE: Customer asking about pricing, quotes, costs, discounts
+   - AVAILABILITY: Customer asking if we have a product, what colors are available, do we offer something
+   - PRICE: Customer asking about pricing, quotes, costs, discounts, MOQ, minimum order
    - ARTWORK: Customer requesting design work, artwork files, mockups, or design changes
    - OTHER: None of the above
 
 4. Extract relevant entities (products, quantities, specifications mentioned)
+5. Detect if the request is urgent (keywords: urgent, rush, asap, quickly, fast, express)
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -40,8 +42,10 @@ Respond ONLY with valid JSON in this exact format:
     "products": [],
     "quantity": null,
     "customization": [],
+    "colors": [],
     "other": []
   },
+  "urgent": false,
   "confidence": 0.92
 }`;
 

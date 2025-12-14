@@ -23,6 +23,10 @@ export const config = {
     url: process.env.PRICE_AGENT_URL || 'https://backend-production-b948.up.railway.app',
     apiKey: process.env.PRICE_AGENT_API_KEY,
   },
+  productAgent: {
+    url: process.env.PRODUCT_AGENT_URL || 'https://easyprint-product-agent-production.up.railway.app',
+    apiKey: process.env.PRODUCT_AGENT_API_KEY,
+  },
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },
