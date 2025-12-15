@@ -218,6 +218,92 @@ export function buildTicketEmbed(data) {
  * Format product availability results for Discord display
  */
 function formatProductResults(product) {
+  // Handle multi-product responses
+  if (product.multiProduct && product.results?.length > 0) {
+    return formatMultiProductResults(product);
+  }
+
+  // Single product response
+  return formatSingleProductResult(product);
+}
+
+/**
+ * Format multi-product results (from availability-multi endpoint)
+ */
+function formatMultiProductResults(product) {
+  const lines = [];
+
+  lines.push(`📋 **Multi-Product Query** (${product.results.length} items requested)`);
+  lines.push('');
+
+  product.results.forEach((result, idx) => {
+    const parsed = result.parsed || {};
+    const productName = parsed.product || result.originalQuery || `Product ${idx + 1}`;
+    const quantity = parsed.quantity;
+    const availability = result.availability || {};
+
+    // Header for each product
+    const qtyStr = quantity ? ` (${quantity} pcs)` : '';
+    lines.push(`**${idx + 1}. ${productName}${qtyStr}**`);
+
+    // Synonym resolution
+    if (result.synonymResolved) {
+      lines.push(`   🔍 Matched: "${result.synonymResolved}"`);
+    }
+
+    // Availability
+    if (availability.found) {
+      lines.push(`   ✅ Available`);
+
+      // Show matching products (limit to 2 per item)
+      const matchingProducts = availability.matchingProducts || [];
+      matchingProducts.slice(0, 2).forEach(item => {
+        const productData = item.product || item;
+        const name = productData.name || productData.product_name || 'Unknown';
+        const recommendation = item.recommendation || {};
+        const sourcing = productData.sourcing || {};
+
+        lines.push(`   • ${name}`);
+
+        // Source info
+        if (recommendation.source === 'china') {
+          lines.push(`     🏭 CHINA 🇨🇳 | MOQ: ${recommendation.moq || sourcing.china?.moq || 'N/A'} pcs`);
+        } else if (recommendation.source === 'local' || sourcing.local) {
+          const supplier = recommendation.supplier || sourcing.local?.supplier;
+          const moq = recommendation.moq || sourcing.local?.moq;
+          const leadTime = recommendation.leadTime || sourcing.local?.leadTime;
+          lines.push(`     🏭 LOCAL${supplier ? ` (${supplier})` : ''} | MOQ: ${moq || 'N/A'} pcs${leadTime ? ` | ${leadTime}` : ''}`);
+        }
+      });
+
+      if (matchingProducts.length > 2) {
+        lines.push(`   • ... and ${matchingProducts.length - 2} more options`);
+      }
+    } else {
+      lines.push(`   ❌ Not found - contact sales for custom sourcing`);
+    }
+
+    // Individual summary
+    if (result.summary) {
+      lines.push(`   💬 ${result.summary}`);
+    }
+
+    lines.push('');
+  });
+
+  // Combined summary at the end
+  if (product.summary) {
+    lines.push('───────────────────');
+    lines.push(`💬 **Summary:** ${product.summary}`);
+  }
+
+  return lines.join('\n') || 'No availability information found.';
+}
+
+/**
+ * Format single product result (from availability endpoint)
+ */
+function formatSingleProductResult(product) {
   const lines = [];
 
   // Synonym resolution
