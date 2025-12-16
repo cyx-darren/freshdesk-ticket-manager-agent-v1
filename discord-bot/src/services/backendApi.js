@@ -4,7 +4,7 @@ import { logger } from '../utils/logger.js';
 
 const api = axios.create({
   baseURL: config.backend.url,
-  timeout: 30000,
+  timeout: 60000, // 60 seconds to accommodate KB Agent delays
   headers: {
     'Content-Type': 'application/json',
     'x-api-key': config.backend.apiKey,
