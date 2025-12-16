@@ -83,6 +83,7 @@ export async function analyzeTicket(ticketId, options = {}) {
 
 /**
  * Call relevant agents based on detected intents
+ * Product Agent runs FIRST so we can use its matched product names for Price Agent
  */
 async function callAgents(analysis, ticketData, options, synonymMap = {}) {
   const { intents } = analysis;
@@ -93,9 +94,9 @@ async function callAgents(analysis, ticketData, options, synonymMap = {}) {
     artwork: null,
   };
 
-  const agentPromises = [];
+  const parallelPromises = [];
 
-  // Knowledge Base Agent
+  // Knowledge Base Agent - runs in parallel
   if (options.includeKB !== false && (intents.includes('KNOWLEDGE') || intents.includes('OTHER'))) {
     const kbPromise = callKBAgent(analysis, ticketData)
       .then(result => { responses.knowledge = result; })
@@ -103,29 +104,38 @@ async function callAgents(analysis, ticketData, options, synonymMap = {}) {
         logger.error('KB Agent failed:', error);
         responses.knowledge = { success: false, error: error.message };
       });
-    agentPromises.push(kbPromise);
+    parallelPromises.push(kbPromise);
   }
 
-  // Product Agent - pass synonymMap for canonical names
-  if (options.includeProduct !== false && intents.includes('AVAILABILITY')) {
-    const productPromise = callProductAgent(analysis, ticketData, synonymMap)
-      .then(result => { responses.product = result; })
-      .catch(error => {
-        logger.error('Product Agent failed:', error);
-        responses.product = { success: false, error: error.message };
-      });
-    agentPromises.push(productPromise);
+  // Product Agent - runs FIRST (before Price Agent) to get canonical product names
+  const needsProductAgent = options.includeProduct !== false && intents.includes('AVAILABILITY');
+  const needsPriceAgent = options.includePrice !== false && intents.includes('PRICE');
+
+  if (needsProductAgent) {
+    try {
+      responses.product = await callProductAgent(analysis, ticketData, synonymMap);
+    } catch (error) {
+      logger.error('Product Agent failed:', error);
+      responses.product = { success: false, error: error.message };
+    }
   }
 
-  // Price Agent - pass synonymMap for canonical names
-  if (options.includePrice !== false && intents.includes('PRICE')) {
-    const pricePromise = callPriceAgent(analysis, ticketData, synonymMap)
+  // Price Agent - uses product names from Product Agent response
+  if (needsPriceAgent) {
+    // Extract canonical product names from Product Agent response
+    const canonicalProductNames = extractCanonicalNamesFromProductResponse(responses.product);
+
+    if (canonicalProductNames.length > 0) {
+      logger.info(`Using Product Agent matched names for Price Agent: ${canonicalProductNames.join(', ')}`);
+    }
+
+    const pricePromise = callPriceAgent(analysis, ticketData, synonymMap, canonicalProductNames)
       .then(result => { responses.price = result; })
       .catch(error => {
         logger.error('Price Agent failed:', error);
         responses.price = { success: false, error: error.message };
       });
-    agentPromises.push(pricePromise);
+    parallelPromises.push(pricePromise);
   }
 
   // Artwork Agent (Phase 2 - placeholder)
@@ -136,10 +146,48 @@ async function callAgents(analysis, ticketData, options, synonymMap = {}) {
     };
   }
 
-  // Wait for all agents to complete
-  await Promise.all(agentPromises);
+  // Wait for parallel agents (KB Agent, Price Agent) to complete
+  await Promise.all(parallelPromises);
 
   return responses;
+}
+
+/**
+ * Extract canonical product names from Product Agent response
+ */
+function extractCanonicalNamesFromProductResponse(productResponse) {
+  if (!productResponse?.success || !productResponse?.products) {
+    return [];
+  }
+
+  const names = [];
+
+  // Handle both single and multi-product responses
+  const products = productResponse.products || [];
+
+  products.forEach(product => {
+    // Product Agent returns different structures - handle both
+    const name = product.name || product.product_name || product.product?.name || product.product?.product_name;
+    if (name) {
+      names.push(name);
+    }
+  });
+
+  // Also check for multi-product results structure
+  if (productResponse.results) {
+    productResponse.results.forEach(result => {
+      if (result.availability?.matchingProducts) {
+        result.availability.matchingProducts.forEach(mp => {
+          const name = mp.name || mp.product_name || mp.product?.name || mp.product?.product_name;
+          if (name && !names.includes(name)) {
+            names.push(name);
+          }
+        });
+      }
+    });
+  }
+
+  return names;
 }
 
 /**
@@ -158,9 +206,10 @@ async function callKBAgent(analysis, ticketData) {
 
 /**
  * Call the Price Agent
+ * @param {string[]} canonicalProductNames - Product names from Product Agent to use for query
  */
-async function callPriceAgent(analysis, ticketData, synonymMap = {}) {
-  const query = buildPriceQuery(analysis, ticketData.ticket.subject, synonymMap);
+async function callPriceAgent(analysis, ticketData, synonymMap = {}, canonicalProductNames = []) {
+  const query = buildPriceQuery(analysis, ticketData.ticket.subject, synonymMap, canonicalProductNames);
 
   const result = await queryPriceAgent(query, {
     ticketId: ticketData.ticket.id,

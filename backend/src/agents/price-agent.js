@@ -59,9 +59,13 @@ export async function queryPriceAgent(query, context = {}) {
 
 /**
  * Build a price query string from ticket analysis
- * Uses canonical names from synonymMap if available
+ * Prioritizes canonical names from Product Agent, falls back to synonymMap
+ * @param {Object} analysis - Ticket analysis
+ * @param {string} ticketSubject - Ticket subject
+ * @param {Object} synonymMap - Synonym resolution map
+ * @param {string[]} canonicalProductNames - Product names from Product Agent (highest priority)
  */
-export function buildPriceQuery(analysis, ticketSubject, synonymMap = {}) {
+export function buildPriceQuery(analysis, ticketSubject, synonymMap = {}, canonicalProductNames = []) {
   const { latestCustomerMessage, extractedEntities } = analysis;
 
   // Start with the customer message as it likely contains quantity and product info
@@ -71,8 +75,13 @@ export function buildPriceQuery(analysis, ticketSubject, synonymMap = {}) {
   if (extractedEntities) {
     const parts = [];
 
-    // Add products - use canonical names if available
-    if (extractedEntities.products?.length > 0) {
+    // PRIORITY 1: Use canonical names from Product Agent if available
+    if (canonicalProductNames.length > 0) {
+      parts.push(canonicalProductNames.join(' '));
+      logger.info(`Price Agent using Product Agent matched names: ${canonicalProductNames.join(', ')}`);
+    }
+    // PRIORITY 2: Fall back to synonym resolution or original terms
+    else if (extractedEntities.products?.length > 0) {
       const productNames = extractedEntities.products.map(product => {
         // Check if we have a canonical name for this product
         const resolution = synonymMap[product];
