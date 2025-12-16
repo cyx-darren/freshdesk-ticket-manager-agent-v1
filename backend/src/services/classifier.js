@@ -25,7 +25,7 @@ TASK:
 2. Identify the customer's latest request/question
 3. Classify the intent(s) from these categories:
    - KNOWLEDGE: Customer asking about product information, specifications, processes, policies
-   - AVAILABILITY: Customer asking if we have a product, what colors are available, do we offer something
+   - AVAILABILITY: Customer asking if we have a product, what colors are available, do we offer something, OR mentioning a specific product they want to purchase/get a quote for (always include this when a product is mentioned)
    - PRICE: Customer asking about pricing, quotes, costs, discounts, MOQ, minimum order
    - ARTWORK: Customer requesting design work, artwork files, mockups, or design changes
    - OTHER: None of the above
