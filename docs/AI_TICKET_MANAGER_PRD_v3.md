@@ -3,7 +3,7 @@
 ## Document Info
 | Field | Value |
 |-------|-------|
-| Version | 3.1 |
+| Version | 3.2 |
 | Last Updated | December 16, 2025 |
 | Status | In Progress |
 | Author | Darren / Claude |
@@ -492,8 +492,14 @@ Let me know if you'd like to proceed with this order!"
 │           │                                                     │
 │           ▼                                                     │
 │  ┌─────────────────┐                                            │
+│  │ Resolve Product │ ← Product Agent /api/product/resolve       │
+│  │ Synonyms        │   "hoodies" → "Hooded Sweatshirt"          │
+│  └────────┬────────┘                                            │
+│           │                                                     │
+│           ▼                                                     │
+│  ┌─────────────────┐                                            │
 │  │ Route to        │ ← Parallel execution for MIXED             │
-│  │ Agent(s)        │                                            │
+│  │ Agent(s)        │   (using canonical product names)          │
 │  └────────┬────────┘                                            │
 │           │                                                     │
 │           ▼                                                     │
@@ -624,7 +630,8 @@ ai-ticket-manager/
 │   │   │   ├── freshdesk.js
 │   │   │   ├── classifier.js
 │   │   │   ├── orchestrator.js
-│   │   │   └── synthesizer.js
+│   │   │   ├── synthesizer.js
+│   │   │   └── synonymResolver.js
 │   │   └── agents/
 │   │       ├── kb-agent.js
 │   │       ├── product-agent.js
@@ -730,6 +737,7 @@ SUPABASE_SERVICE_KEY=xxx
 - [x] Update orchestrator to call all agents ✅
 - [x] Implement response synthesizer with suggested reply generation ✅
 - [x] Add multi-product query support (`/api/product/availability-multi`) ✅
+- [x] Add synonym resolution before agent calls (`/api/product/resolve`) ✅
 - [ ] Scrape Magento 2 → Populate sheet with 300-400 products
 - [ ] Build Artwork Agent (artwork message integration)
 
@@ -813,3 +821,4 @@ SUPABASE_SERVICE_KEY=xxx
 | 2.0 | 2025-12-11 | Added Product Agent, sourcing logic, Google Sheet structure |
 | 3.0 | 2025-12-14 | Updated status: Product Agent & Price Agent deployed. Added Response Philosophy (sales team member style). Updated Artwork Agent to include "Will send artwork shortly" message. Reorganized phases to reflect actual progress. |
 | 3.1 | 2025-12-16 | Added multi-product query support for Product Agent (`/api/product/availability-multi`). Improved intent classification to trigger AVAILABILITY when products mentioned for quotes. Implemented response synthesizer. Increased Discord bot timeout to 60s. |
+| 3.2 | 2025-12-16 | Added synonym resolution step to orchestrator. Customer product terms (e.g., "hoodies") are now resolved to canonical names (e.g., "Hooded Sweatshirt") via Product Agent `/api/product/resolve` before calling Price Agent and Product Agent. This fixes incorrect product matching (e.g., tote bags returned instead of apparel). Added `synonymResolver.js` service. |
