@@ -3,8 +3,8 @@
 ## Document Info
 | Field | Value |
 |-------|-------|
-| Version | 3.0 |
-| Last Updated | December 14, 2025 |
+| Version | 3.1 |
+| Last Updated | December 16, 2025 |
 | Status | In Progress |
 | Author | Darren / Claude |
 
@@ -728,13 +728,14 @@ SUPABASE_SERVICE_KEY=xxx
 - [x] Build Product Agent (Website + Sheet integration) ✅
 - [x] Build Price Agent (Pricelist/Supabase integration) ✅
 - [x] Update orchestrator to call all agents ✅
+- [x] Implement response synthesizer with suggested reply generation ✅
+- [x] Add multi-product query support (`/api/product/availability-multi`) ✅
 - [ ] Scrape Magento 2 → Populate sheet with 300-400 products
 - [ ] Build Artwork Agent (artwork message integration)
-- [ ] Implement response synthesizer with suggested reply generation
 
 ### Phase 3: Sales Response Generation 🔄 IN PROGRESS
-- [ ] Generate draft replies in sales team member style
-- [ ] Include "Will send the artwork shortly" for ARTWORK intents
+- [x] Generate draft replies in sales team member style ✅
+- [x] Include "Will send the artwork shortly" for ARTWORK intents ✅
 - [ ] Add Discord approval buttons (✅ Approve / ✏️ Edit / ❌ Cancel)
 - [ ] Integrate Freshdesk reply API
 - [ ] Human-in-the-loop workflow
@@ -811,3 +812,4 @@ SUPABASE_SERVICE_KEY=xxx
 | 1.0 | 2025-12-10 | Initial PRD with KB Agent integration |
 | 2.0 | 2025-12-11 | Added Product Agent, sourcing logic, Google Sheet structure |
 | 3.0 | 2025-12-14 | Updated status: Product Agent & Price Agent deployed. Added Response Philosophy (sales team member style). Updated Artwork Agent to include "Will send artwork shortly" message. Reorganized phases to reflect actual progress. |
+| 3.1 | 2025-12-16 | Added multi-product query support for Product Agent (`/api/product/availability-multi`). Improved intent classification to trigger AVAILABILITY when products mentioned for quotes. Implemented response synthesizer. Increased Discord bot timeout to 60s. |
