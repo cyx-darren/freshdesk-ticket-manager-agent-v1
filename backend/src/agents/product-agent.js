@@ -159,8 +159,9 @@ export async function queryProductAgent(query, context = {}) {
 /**
  * Build a product query from ticket analysis
  * Includes quantity in query text so Product Agent can parse it
+ * Uses canonical names from synonymMap if available
  */
-export function buildProductQuery(analysis, ticketSubject) {
+export function buildProductQuery(analysis, ticketSubject, synonymMap = {}) {
   const { latestCustomerMessage, extractedEntities } = analysis;
 
   // Start with the customer message (contains quantity info)
@@ -170,9 +171,18 @@ export function buildProductQuery(analysis, ticketSubject) {
   if (extractedEntities) {
     const parts = [];
 
-    // Add products
+    // Add products - use canonical names if available
     if (extractedEntities.products?.length > 0) {
-      parts.push(extractedEntities.products.join(' '));
+      const productNames = extractedEntities.products.map(product => {
+        // Check if we have a canonical name for this product
+        const resolution = synonymMap[product];
+        if (resolution?.canonical) {
+          return resolution.canonical;
+        }
+        return product;
+      });
+      parts.push(productNames.join(' '));
+      logger.info(`Product Agent query using products: ${productNames.join(', ')}`);
     }
 
     // Add any color or customization details

@@ -1,6 +1,7 @@
 import { getFullTicketData } from './freshdesk.js';
 import { classifyTicket } from './classifier.js';
 import { synthesizeResponse } from './synthesizer.js';
+import { resolveProductSynonyms, getCanonicalNames } from './synonymResolver.js';
 import { queryKnowledgeBase, buildKBQuery } from '../agents/kb-agent.js';
 import { queryPriceAgent, buildPriceQuery } from '../agents/price-agent.js';
 import { queryProductAgent, buildProductQuery, extractProductContext } from '../agents/product-agent.js';
@@ -23,16 +24,29 @@ export async function analyzeTicket(ticketId, options = {}) {
   // Step 2: Classify intent and summarize with Claude
   const analysis = await classifyTicket(ticketData);
 
-  // Step 3: Call relevant agents based on intent
-  const agentResponses = await callAgents(analysis, ticketData, options);
+  // Step 3: Resolve product synonyms to canonical names
+  // This ensures Price Agent and Product Agent receive proper product names
+  let synonymMap = {};
+  const productTerms = analysis.extractedEntities?.products || [];
 
-  // Step 4: Synthesize a suggested response (sales team member style)
-  let synthesizedResponse = null;
-  if (options.includeSynthesis !== false) {
-    synthesizedResponse = await synthesizeResponse(ticketData, analysis, agentResponses);
+  if (productTerms.length > 0 &&
+      (analysis.intents.includes('AVAILABILITY') || analysis.intents.includes('PRICE'))) {
+    logger.info(`Resolving synonyms for: ${JSON.stringify(productTerms)}`);
+    synonymMap = await resolveProductSynonyms(productTerms);
+    const canonicalNames = getCanonicalNames(synonymMap);
+    logger.info(`Resolved to canonical names: ${JSON.stringify(canonicalNames)}`);
   }
 
-  // Step 5: Build response
+  // Step 4: Call relevant agents based on intent
+  const agentResponses = await callAgents(analysis, ticketData, options, synonymMap);
+
+  // Step 5: Synthesize a suggested response (sales team member style)
+  let synthesizedResponse = null;
+  if (options.includeSynthesis !== false) {
+    synthesizedResponse = await synthesizeResponse(ticketData, analysis, agentResponses, synonymMap);
+  }
+
+  // Step 6: Build response
   const processingTime = Date.now() - startTime;
 
   const result = {
@@ -54,6 +68,7 @@ export async function analyzeTicket(ticketId, options = {}) {
       extractedEntities: analysis.extractedEntities,
       confidence: analysis.confidence,
     },
+    synonymResolution: Object.keys(synonymMap).length > 0 ? synonymMap : null,
     agentResponses,
     synthesizedResponse,
     freshdeskUrl: `https://${config.freshdesk.domain}/a/tickets/${ticketId}`,
@@ -69,7 +84,7 @@ export async function analyzeTicket(ticketId, options = {}) {
 /**
  * Call relevant agents based on detected intents
  */
-async function callAgents(analysis, ticketData, options) {
+async function callAgents(analysis, ticketData, options, synonymMap = {}) {
   const { intents } = analysis;
   const responses = {
     knowledge: null,
@@ -91,9 +106,9 @@ async function callAgents(analysis, ticketData, options) {
     agentPromises.push(kbPromise);
   }
 
-  // Product Agent
+  // Product Agent - pass synonymMap for canonical names
   if (options.includeProduct !== false && intents.includes('AVAILABILITY')) {
-    const productPromise = callProductAgent(analysis, ticketData)
+    const productPromise = callProductAgent(analysis, ticketData, synonymMap)
       .then(result => { responses.product = result; })
       .catch(error => {
         logger.error('Product Agent failed:', error);
@@ -102,9 +117,9 @@ async function callAgents(analysis, ticketData, options) {
     agentPromises.push(productPromise);
   }
 
-  // Price Agent
+  // Price Agent - pass synonymMap for canonical names
   if (options.includePrice !== false && intents.includes('PRICE')) {
-    const pricePromise = callPriceAgent(analysis, ticketData)
+    const pricePromise = callPriceAgent(analysis, ticketData, synonymMap)
       .then(result => { responses.price = result; })
       .catch(error => {
         logger.error('Price Agent failed:', error);
@@ -144,8 +159,8 @@ async function callKBAgent(analysis, ticketData) {
 /**
  * Call the Price Agent
  */
-async function callPriceAgent(analysis, ticketData) {
-  const query = buildPriceQuery(analysis, ticketData.ticket.subject);
+async function callPriceAgent(analysis, ticketData, synonymMap = {}) {
+  const query = buildPriceQuery(analysis, ticketData.ticket.subject, synonymMap);
 
   const result = await queryPriceAgent(query, {
     ticketId: ticketData.ticket.id,
@@ -158,8 +173,8 @@ async function callPriceAgent(analysis, ticketData) {
 /**
  * Call the Product Agent
  */
-async function callProductAgent(analysis, ticketData) {
-  const query = buildProductQuery(analysis, ticketData.ticket.subject);
+async function callProductAgent(analysis, ticketData, synonymMap = {}) {
+  const query = buildProductQuery(analysis, ticketData.ticket.subject, synonymMap);
   const { quantity, urgent } = extractProductContext(analysis);
 
   const result = await queryProductAgent(query, {

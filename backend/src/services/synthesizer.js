@@ -57,8 +57,9 @@ ARTWORK (include this exact line if artwork/mockup was requested):
 
 /**
  * Synthesize a sales-style response from agent data
+ * @param {Object} synonymMap - Optional mapping of customer terms to canonical product names
  */
-export async function synthesizeResponse(ticketData, analysis, agentResponses) {
+export async function synthesizeResponse(ticketData, analysis, agentResponses, synonymMap = {}) {
   const { ticket, customer, emailCount } = ticketData;
   const { intents, latestCustomerMessage, extractedEntities } = analysis;
 

@@ -59,8 +59,9 @@ export async function queryPriceAgent(query, context = {}) {
 
 /**
  * Build a price query string from ticket analysis
+ * Uses canonical names from synonymMap if available
  */
-export function buildPriceQuery(analysis, ticketSubject) {
+export function buildPriceQuery(analysis, ticketSubject, synonymMap = {}) {
   const { latestCustomerMessage, extractedEntities } = analysis;
 
   // Start with the customer message as it likely contains quantity and product info
@@ -70,9 +71,18 @@ export function buildPriceQuery(analysis, ticketSubject) {
   if (extractedEntities) {
     const parts = [];
 
-    // Add products
+    // Add products - use canonical names if available
     if (extractedEntities.products?.length > 0) {
-      parts.push(extractedEntities.products.join(' '));
+      const productNames = extractedEntities.products.map(product => {
+        // Check if we have a canonical name for this product
+        const resolution = synonymMap[product];
+        if (resolution?.canonical) {
+          return resolution.canonical;
+        }
+        return product;
+      });
+      parts.push(productNames.join(' '));
+      logger.info(`Price Agent query using products: ${productNames.join(', ')}`);
     }
 
     // Add quantity if available
